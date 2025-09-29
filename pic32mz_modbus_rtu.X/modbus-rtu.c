@@ -179,7 +179,7 @@ static int _modbus_rtu_flush(modbus_t *ctx)
     
     if (strcmp(ctx_rtu->device, MODBUS_RTU_DEVICE) == 0)
     {
-        status = UART2_ReadAbort();
+        status = true;
     }
     
     return status == true ? 0 : -1;
@@ -366,6 +366,8 @@ modbus_new_rtu(const char *device, int baud, char parity, int data_bit, int stop
     ctx_rtu->data_bit = data_bit;
     ctx_rtu->stop_bit = stop_bit;
 
+    ctx->backend->connect(ctx);
+    
 #if defined HAVE_DECL_TIOCSRS485
     /* The RS232 mode has been set by default */
     ctx_rtu->serial_mode = MODBUS_RTU_RS232;

@@ -299,7 +299,7 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
     }
     
     if (ctx->debug)
-        printf("\n");
+        printf("\r\n");
 
     return ctx->backend->check_integrity(ctx, msg, msg_length);  
 }
@@ -539,7 +539,7 @@ static int send_msg(modbus_t *ctx, uint8_t *msg, int msg_length)
     {
         for (i = 0; i < msg_length; i++)
             printf("[%.2X]", msg[i]);
-        printf("\n");
+        printf("\r\n");
     }
 
     /* In recovery mode, the write command will be issued until to be

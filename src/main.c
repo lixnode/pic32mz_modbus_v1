@@ -51,6 +51,7 @@ int main ( void )
       
     ctx = modbus_new_rtu(MODBUS_RTU_DEVICE, 115200, 'N', 8, 1);
     modbus_set_slave(ctx, MODBUS_DEFAULT_SLAVE_ID);
+    modbus_set_debug(ctx, true);
     mb_mapping =
         modbus_mapping_new(MODBUS_MAX_READ_BITS, 0, MODBUS_MAX_READ_REGISTERS, 0);
     if (mb_mapping == NULL) {
