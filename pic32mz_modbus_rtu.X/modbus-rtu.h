@@ -19,7 +19,7 @@
 #define MODBUS_INFORMATIVE_RX_TIMEOUT       1
 #define MODBUS_DEFAULT_SLAVE_ID             0x01
 #define HAVE_DECL_TIOCSRS485
-#define MODBUS_RTU_DEVICE                   "UART2"
+#define MODBUS_RTU_HAL_UART2                   "UART2"
 
 
 MODBUS_API modbus_t *modbus_new_rtu(const char *device, int baud, char parity, int data_bit, int stop_bit);

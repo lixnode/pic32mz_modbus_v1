@@ -192,6 +192,7 @@ MODBUS_API int modbus_write_register(modbus_t *ctx, int reg_addr, const uint16_t
 MODBUS_API int modbus_write_bits(modbus_t *ctx, int addr, int nb, const uint8_t *data);
 MODBUS_API int modbus_write_registers(modbus_t *ctx, int addr, int nb, const uint16_t *data);
 
+/* MODBUS mapping data */
 MODBUS_API modbus_mapping_t *
 modbus_mapping_new_start_address(unsigned int start_bits,
                                  unsigned int nb_bits,
@@ -206,8 +207,8 @@ MODBUS_API modbus_mapping_t *modbus_mapping_new(int nb_bits,
                                                 int nb_input_bits,
                                                 int nb_registers,
                                                 int nb_input_registers);
-MODBUS_API void modbus_mapping_free(modbus_mapping_t *mb_mapping);
 
+MODBUS_API void modbus_mapping_free(modbus_mapping_t *mb_mapping);
 MODBUS_API void modbus_free(modbus_t *ctx);
 
 /**
@@ -261,6 +262,7 @@ MODBUS_API void modbus_set_float_dcba(float f, uint16_t *dest);
 MODBUS_API void modbus_set_float_badc(float f, uint16_t *dest);
 MODBUS_API void modbus_set_float_cdab(float f, uint16_t *dest);
 
+#include "modbus-version.h"
 #include "modbus-rtu.h"
 
 #endif	/* MODBUS_H */

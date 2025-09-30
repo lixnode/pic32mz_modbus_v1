@@ -56,10 +56,27 @@ static const uint8_t table_crc_lo[] = {
     0x4C, 0x8C, 0x44, 0x84, 0x85, 0x45, 0x87, 0x47, 0x46, 0x86, 0x82, 0x42, 0x43, 0x83,
     0x41, 0x81, 0x80, 0x40};
 
+/* Calculate MODBUS CRC16 */
+static uint16_t crc16(uint8_t *buffer, uint16_t buffer_length)
+{
+    uint8_t crc_hi = 0xFF; /* high CRC byte initialized */
+    uint8_t crc_lo = 0xFF; /* low CRC byte initialized */
+    unsigned int i;        /* will index into CRC lookup */
+
+    /* pass through message buffer */
+    while (buffer_length--) 
+    {
+        i = crc_lo ^ *buffer++; /* calculate the CRC  */
+        crc_lo = crc_hi ^ table_crc_hi[i];
+        crc_hi = table_crc_lo[i];
+    }
+
+    return (crc_hi << 8 | crc_lo);
+}
 
 static int _modbus_set_slave(modbus_t *ctx, int slave)
 {
-    if (slave >= 0 && slave < 255)
+    if (slave > 0 && slave < 247)
     {
         ctx->slave = slave;
         return 0;
@@ -68,7 +85,8 @@ static int _modbus_set_slave(modbus_t *ctx, int slave)
 }
 
 /* Builds a RTU request header */
-static int _modbus_rtu_build_request_basis(modbus_t *ctx, int function, int addr, int nb, uint8_t *req)
+static int _modbus_rtu_build_request_basis(modbus_t *ctx,
+                                           int function, int addr, int nb, uint8_t *req)
 {
     assert(ctx->slave != -1);
     
@@ -91,47 +109,31 @@ static int _modbus_rtu_build_response_basis(sft_t *sft, uint8_t *rsp)
     return _MODBUS_RTU_PRESET_RSP_LENGTH;
 }
 
-static uint16_t crc16(uint8_t *buffer, uint16_t buffer_length)
-{
-    uint8_t crc_hi = 0xFF; /* high CRC byte initialized */
-    uint8_t crc_lo = 0xFF; /* low CRC byte initialized */
-    unsigned int i;        /* will index into CRC lookup */
-
-    /* pass through message buffer */
-    while (buffer_length--) 
-    {
-        i = crc_lo ^ *buffer++; /* calculate the CRC  */
-        crc_lo = crc_hi ^ table_crc_hi[i];
-        crc_hi = table_crc_lo[i];
-    }
-
-    return (crc_hi << 8 | crc_lo);
-}
-
+/* RTU doesn't support transaction id */
 static int _modbus_rtu_get_response_tid(const uint8_t *req)
 {
     /* No TID */
     return 0;
 }
 
+/* RTU add 2 bytes CRC at the end of frame */
 static int _modbus_rtu_send_msg_pre(uint8_t *req, int req_length)
 {
     uint16_t crc = crc16(req, req_length);
 
-    /* According to the MODBUS specs (p. 14), the low order byte of the CRC comes
-     * first in the RTU message */
     req[req_length++] = crc & 0x00FF;
     req[req_length++] = crc >> 8;
 
     return req_length;
 }
 
+/* RTU send data on bus */
 static size_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_length)
 {
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
     bool status = false;
     
-    if (strcmp(ctx_rtu->device, MODBUS_RTU_DEVICE) == 0)
+    if (strcmp(ctx_rtu->device, MODBUS_RTU_HAL_UART2) == 0)
     {
         status = UART2_Write((void*)req, (const size_t)req_length);
     }
@@ -139,12 +141,13 @@ static size_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_length
     return status == true ? req_length : 0; 
 }
 
+/* RTU receive data from bus */
 static size_t _modbus_rtu_recv(modbus_t *ctx, uint8_t *rsp, int rsp_length)
 {
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
     bool status = false;
     
-    if (strcmp(ctx_rtu->device, MODBUS_RTU_DEVICE) == 0)
+    if (strcmp(ctx_rtu->device, MODBUS_RTU_HAL_UART2) == 0)
     {
         status = UART2_Read((void*)rsp, (const size_t)rsp_length);
     }
@@ -152,13 +155,13 @@ static size_t _modbus_rtu_recv(modbus_t *ctx, uint8_t *rsp, int rsp_length)
     return status == true ? rsp_length : 0; 
 }
 
-
+/* RTU > 0 if the data is avaliable on bus */
 static size_t _modbus_rtu_available(modbus_t *ctx)
 {
     int rc = -1;   
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
     
-    if (strcmp(ctx_rtu->device, MODBUS_RTU_DEVICE) == 0)
+    if (strcmp(ctx_rtu->device, MODBUS_RTU_HAL_UART2) == 0)
     {
         rc = UART2_ReadCountGet();
     }
@@ -166,18 +169,19 @@ static size_t _modbus_rtu_available(modbus_t *ctx)
     return rc;
 }
 
-
+/* RTU receive a message from MODBUS master */
 static int _modbus_rtu_receive(modbus_t *ctx, uint8_t *req)
 {
     return _modbus_receive_msg(ctx, req, MSG_INDICATION);;
 }
 
+/* Flush all data on bus */
 static int _modbus_rtu_flush(modbus_t *ctx)
 { 
     bool status = false;
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
     
-    if (strcmp(ctx_rtu->device, MODBUS_RTU_DEVICE) == 0)
+    if (strcmp(ctx_rtu->device, MODBUS_RTU_HAL_UART2) == 0)
     {
         status = true;
     }
@@ -185,6 +189,8 @@ static int _modbus_rtu_flush(modbus_t *ctx)
     return status == true ? 0 : -1;
 }
 
+/* RTU slave pre-check the message income 
+ * CRC and unit identify (slave) check */
 static int _modbus_rtu_check_integrity(modbus_t *ctx, uint8_t *msg, const int msg_length)
 {
     uint16_t crc_calculated;
@@ -199,7 +205,8 @@ static int _modbus_rtu_check_integrity(modbus_t *ctx, uint8_t *msg, const int ms
     {
         if (ctx->debug) 
         {
-            printf("ERROR CRC received 0x%0X != CRC calculated 0x%0X\n", crc_received, crc_calculated);
+            printf("ERROR CRC received 0x%0X != CRC calculated 0x%0X\r\n", 
+                    crc_received, crc_calculated);
         }
 
         if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_PROTOCOL) 
@@ -214,16 +221,15 @@ static int _modbus_rtu_check_integrity(modbus_t *ctx, uint8_t *msg, const int ms
     if (slave != ctx->slave && slave != MODBUS_BROADCAST_ADDRESS) 
     {
         if (ctx->debug) {
-            printf("Request for slave %d ignored (not %d)\n", slave, ctx->slave);
-        }
-        /* Following call to check_confirmation handles this error */
+            printf("Request for slave %d ignored (not %d)\r\n", slave, ctx->slave);
+        }       
         return 0;
     }
 
     return msg_length;
 }
 
-
+/* RTU as master mode, pre check the slave id response */
 static int _modbus_rtu_pre_check_confirmation(modbus_t *ctx, const uint8_t *req, const uint8_t *rsp, int rsp_length)
 {
     /* Check responding slave is the slave we requested (except for broacast
@@ -232,7 +238,8 @@ static int _modbus_rtu_pre_check_confirmation(modbus_t *ctx, const uint8_t *req,
     {
         if (ctx->debug) 
         {
-            printf("The responding slave %d isn't the requested slave %d\n", rsp[0], req[0]);
+            printf("The responding slave %d isn't the requested slave %d\r\n",
+                    rsp[0], req[0]);
         }
         errno = EMBBADSLAVE;
         return -1;
@@ -243,6 +250,8 @@ static int _modbus_rtu_pre_check_confirmation(modbus_t *ctx, const uint8_t *req,
     }
 }
 
+/* RTU master/slave connect 
+ * Set configurations to serial port */
 static int _modbus_rtu_connect(modbus_t *ctx)
 {
     modbus_rtu_t* ctx_rtu = (modbus_rtu_t*)ctx->backend_data;
@@ -261,15 +270,15 @@ static int _modbus_rtu_connect(modbus_t *ctx)
     setup.stopBits = ctx_rtu->stop_bit;
     setup.dataWidth = ctx_rtu->data_bit == 8 ? 0x00U : 0x06U;
     
-    if (strcmp(ctx_rtu->device, MODBUS_RTU_DEVICE) == 0)
+    if (strcmp(ctx_rtu->device, MODBUS_RTU_HAL_UART2) == 0)
     {
-        uint32_t srcClkFreq = UART2_FrequencyGet();
-        status = UART2_SerialSetup(&setup, srcClkFreq);
+        status = UART2_SerialSetup(&setup, UART2_FrequencyGet());
     }
     
     return status == true ? 0 : -1;
 }
 
+/* RTU free all data resources*/
 static void _modbus_rtu_free(modbus_t *ctx)
 {
     if (ctx->backend_data) 
@@ -281,6 +290,7 @@ static void _modbus_rtu_free(modbus_t *ctx)
     free(ctx);
 }
 
+/* RTU backend */
 const modbus_backend_t _modbus_rtu_backend = 
 {
     .backend_type               = _MODBUS_BACKEND_TYPE_RTU,
@@ -307,8 +317,7 @@ const modbus_backend_t _modbus_rtu_backend =
     .free                       = _modbus_rtu_free,
 };
 
-modbus_t *
-modbus_new_rtu(const char *device, int baud, char parity, int data_bit, int stop_bit)
+modbus_t* modbus_new_rtu(const char *device, int baud, char parity, int data_bit, int stop_bit)
 {
     modbus_t *ctx;
     modbus_rtu_t *ctx_rtu;
@@ -322,21 +331,24 @@ modbus_new_rtu(const char *device, int baud, char parity, int data_bit, int stop
     /* Check baud argument */
     if (baud == 0) 
     {
-        printf("The baud rate value must not be zero\n");
+        printf("The baud rate value must not be zero\r\n");
         errno = EINVAL;
         return NULL;
     }
 
-    ctx = (modbus_t *) malloc(sizeof(modbus_t));
+    ctx = (modbus_t*)malloc(sizeof(modbus_t));
     if (ctx == NULL) 
     {
         return NULL;
     }
-
+    
+    /* Common initialize */
     _modbus_init_common(ctx);
+    
     ctx->backend = &_modbus_rtu_backend;
     ctx->backend_data = (modbus_rtu_t*)malloc(sizeof(modbus_rtu_t));
-    if (ctx->backend_data == NULL) {
+    if (ctx->backend_data == NULL) 
+    {
         modbus_free(ctx);
         errno = ENOMEM;
         return NULL;
@@ -345,13 +357,14 @@ modbus_new_rtu(const char *device, int baud, char parity, int data_bit, int stop
 
     /* Device name and \0 */
     ctx_rtu->device = (char*)malloc((strlen(device) + 1) * sizeof(char));
-    if (ctx_rtu->device == NULL) {
+    if (ctx_rtu->device == NULL) 
+    {
         modbus_free(ctx);
         errno = ENOMEM;
         return NULL;
     }
-
     strcpy(ctx_rtu->device, device);
+    
     ctx_rtu->baud = baud;
     if (parity == 'N' || parity == 'E' || parity == 'O') 
     {
@@ -378,7 +391,11 @@ modbus_new_rtu(const char *device, int baud, char parity, int data_bit, int stop
 /* Calculate estimated time in micro second to send one byte */
     ctx_rtu->onebyte_time =
         1000000 * (1 + data_bit + (parity == 'N' ? 0 : 1) + stop_bit) / baud;
-
+    
+    /* Calculate byte timeout in milliseconds */
+    ctx->byte_timeout = ctx_rtu->onebyte_time / 1000;
+    if (ctx->byte_timeout < _BYTE_TIMEOUT) ctx->byte_timeout = _BYTE_TIMEOUT;
+    
     ctx_rtu->confirmation_to_ignore = 0;
 
     return ctx;

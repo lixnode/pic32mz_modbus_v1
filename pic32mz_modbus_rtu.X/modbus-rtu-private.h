@@ -30,7 +30,8 @@ typedef struct _modbus_rtu
     uint8_t stop_bit;
     /* Parity: 'N', 'O', 'E' */
     char parity;
-    int serial_mode;
+    /* RS232, RS485 modes */
+    int serial_mode;   
     int onebyte_time;
     /* To handle many slaves on the same link */
     int confirmation_to_ignore;

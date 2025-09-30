@@ -10,6 +10,7 @@ build/default/production/_ext/1360937237/main.o: ../src/main.c \
  ../src/config/default/peripheral/gpio/plib_gpio.h \
  ../src/config/default/peripheral/evic/plib_evic.h \
  ../src/../pic32mz_modbus_rtu.X/modbus.h \
+ ../src/../pic32mz_modbus_rtu.X/modbus-version.h \
  ../src/../pic32mz_modbus_rtu.X/modbus-rtu.h \
  ../src/../pic32mz_modbus_rtu.X/config.h
 
@@ -34,6 +35,8 @@ build/default/production/_ext/1360937237/main.o: ../src/main.c \
 ../src/config/default/peripheral/evic/plib_evic.h:
 
 ../src/../pic32mz_modbus_rtu.X/modbus.h:
+
+../src/../pic32mz_modbus_rtu.X/modbus-version.h:
 
 ../src/../pic32mz_modbus_rtu.X/modbus-rtu.h:
 
